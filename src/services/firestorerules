@@ -1,0 +1,204 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user owns the resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Helper function to check if user can access expense data
+    function canAccessExpense() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Helper function to validate expense data
+    function isValidExpense() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['amount', 'label', 'category', 'date', 'userId']) &&
+             data.amount is number && data.amount > 0 &&
+             data.label is string && data.label.size() > 0 && data.label.size() <= 26 &&
+             data.category is string && data.category.size() > 0 &&
+             data.date is timestamp &&
+             data.userId == request.auth.uid;
+    }
+
+    // Helper function to validate category data
+    function isValidCategory() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['name', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 15 &&
+             data.userId == request.auth.uid;
+    }
+
+    // Helper function to check if user can access income data
+    function canAccessIncome() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Helper function to validate income data
+    function isValidIncome() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['amount', 'label', 'category', 'date', 'userId']) &&
+             data.amount is number && data.amount > 0 &&
+             data.label is string && data.label.size() > 0 && data.label.size() <= 26 &&
+             data.category is string && data.category.size() > 0 &&
+             data.date is timestamp &&
+             data.userId == request.auth.uid;
+    }
+
+    // Helper function to validate income category data
+    function isValidIncomeCategory() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['name', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 15 &&
+             data.userId == request.auth.uid;
+    }
+
+    // Users collection - users can read/write their own data only
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Expenses collection - personal expenses only
+    match /expenses/{expenseId} {
+      // Users can create their own expenses with valid data
+      allow create: if isAuthenticated() &&
+                   isValidExpense() &&
+                   request.auth.uid == request.resource.data.userId;
+
+      // Users can read their own expenses
+      allow read: if canAccessExpense();
+
+      // Users can update their own expenses with valid data
+      allow update: if canAccessExpense() &&
+                   isValidExpense() &&
+                   request.auth.uid == request.resource.data.userId;
+
+      // Users can delete their own expenses
+      allow delete: if canAccessExpense();
+    }
+
+    // Categories collection - personal categories
+    match /categories/{categoryId} {
+      // Users can create their own categories with valid data
+      allow create: if isAuthenticated() &&
+                   isValidCategory() &&
+                   request.auth.uid == request.resource.data.userId;
+
+      // Users can read their own categories
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+
+      // Users can update their own categories with valid data
+      allow update: if isAuthenticated() &&
+                   request.auth.uid == resource.data.userId &&
+                   isValidCategory() &&
+                   request.auth.uid == request.resource.data.userId;
+
+      // Users can delete their own categories
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Incomes collection - personal incomes only
+    match /incomes/{incomeId} {
+      // Users can create their own incomes with valid data
+      allow create: if isAuthenticated() &&
+                   isValidIncome() &&
+                   request.auth.uid == request.resource.data.userId;
+
+      // Users can read their own incomes
+      allow read: if canAccessIncome();
+
+      // Users can update their own incomes with valid data
+      allow update: if canAccessIncome() &&
+                   isValidIncome() &&
+                   request.auth.uid == request.resource.data.userId;
+
+      // Users can delete their own incomes
+      allow delete: if canAccessIncome();
+    }
+
+    // Income Categories collection - personal income categories
+    match /incomeCategories/{categoryId} {
+      // Users can create their own income categories with valid data
+      allow create: if isAuthenticated() &&
+                   isValidIncomeCategory() &&
+                   request.auth.uid == request.resource.data.userId;
+
+      // Users can read their own income categories
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+
+      // Users can update their own income categories with valid data
+      allow update: if isAuthenticated() &&
+                   request.auth.uid == resource.data.userId &&
+                   isValidIncomeCategory() &&
+                   request.auth.uid == request.resource.data.userId;
+
+      // Users can delete their own income categories
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Storage for receipts - personal files only
+    match /receipts/{receiptId} {
+      // Users can access their own receipt metadata
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Storage for supporting documents - personal files only
+    match /supporting_documents/{documentId} {
+      // Users can access their own supporting document metadata
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Analytics/cache collections (if needed for performance)
+    match /expense_analytics/{analyticsId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /category_analytics/{analyticsId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /income_analytics/{analyticsId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /income_category_analytics/{analyticsId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // Default rule - deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// Firebase Storage Rules (for receipt images and supporting documents)
+// Note: These rules should be applied to Firebase Storage separately
+/*
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Receipts stored under user's folder
+    match /receipts/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Supporting documents stored under user's folder
+    match /supporting-documents/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+*/
